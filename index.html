@@ -382,20 +382,22 @@
       </div>
     </div>
 
-    <!-- Section 5: Contact (optional) -->
+    <!-- Section 5: Contact (required) -->
     <div class="card">
       <div class="section-title">
         <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        Contact info (optional)
+        Contact info
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="orgName">Organisation / Customer name</label>
-          <input type="text" id="orgName" name="orgName" placeholder="e.g. Indian Bank, SLT, BPCL…">
+          <label for="orgName">Organisation / Customer name <span class="req">*</span></label>
+          <input type="text" id="orgName" name="orgName" placeholder="e.g. Indian Bank, SLT, BPCL..." required>
+          <div class="error-msg" id="orgNameErr">Please enter your organisation name.</div>
         </div>
         <div class="field">
-          <label for="contactEmail">Contact email</label>
-          <input type="email" id="contactEmail" name="contactEmail" placeholder="name@company.com">
+          <label for="contactEmail">Contact email <span class="req">*</span></label>
+          <input type="email" id="contactEmail" name="contactEmail" placeholder="name@company.com" required>
+          <div class="error-msg" id="contactEmailErr">Please enter a valid email address.</div>
         </div>
       </div>
     </div>
@@ -502,20 +504,82 @@ function validate() {
   return ok;
 }
 
-/* ── Submit ── */
-document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+/* ── Validation: org + email ── */
+const origValidate = validate;
+
+/* ── Submit to Formspree ── */
+document.getElementById('feedbackForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  if (!validate()) { document.querySelector('.error, .toggle-group.error-border')?.scrollIntoView({ behavior:'smooth', block:'center' }); return; }
 
-  const ver  = document.getElementById('cdpVersion').value;
-  const plat = document.getElementById('platformType').value;
-  const r    = document.getElementById('starRating').value;
-  document.getElementById('summaryLine').textContent =
-    ver + '  ·  ' + plat + (r ? '  ·  ' + '★'.repeat(+r) + '☆'.repeat(5 - +r) : '');
+  // validate required dropdowns + deploy toggle
+  if (!validate()) {
+    document.querySelector('.error, .toggle-group.error-border')?.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
 
-  document.getElementById('feedbackForm').style.display = 'none';
-  document.getElementById('successScreen').style.display = 'block';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // validate org name
+  const orgEl = document.getElementById('orgName');
+  const orgErr = document.getElementById('orgNameErr');
+  if (!orgEl.value.trim()) {
+    orgEl.classList.add('error'); orgErr.classList.add('show');
+    orgEl.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  } else { orgEl.classList.remove('error'); orgErr.classList.remove('show'); }
+
+  // validate email
+  const emailEl = document.getElementById('contactEmail');
+  const emailErr = document.getElementById('contactEmailErr');
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailEl.value.trim());
+  if (!emailOk) {
+    emailEl.classList.add('error'); emailErr.classList.add('show');
+    emailEl.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  } else { emailEl.classList.remove('error'); emailErr.classList.remove('show'); }
+
+  // show sending state
+  const btn = document.querySelector('.submit-btn');
+  btn.textContent = 'Sending…'; btn.disabled = true;
+
+  const data = {
+    _replyto:         document.getElementById('contactEmail').value,
+    organisation:     document.getElementById('orgName').value,
+    cdp_version:      document.getElementById('cdpVersion').value,
+    platform_type:    document.getElementById('platformType').value,
+    deploy_approach:  document.getElementById('deployApproach').value,
+    migration_status: document.getElementById('migrationStatus').value,
+    platform_stable:  document.getElementById('platformStable').value,
+    satisfaction:     document.getElementById('starRating').value
+                        ? document.getElementById('starRating').value + ' / 5 stars' : 'Not rated',
+    positive_comment: document.getElementById('positiveComment').value || '(none)',
+    negative_comment: document.getElementById('negativeComment').value || '(none)',
+  };
+
+  try {
+    const res = await fetch('https://formspree.io/f/xgoqagkn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      const ver  = data.cdp_version;
+      const plat = data.platform_type;
+      const r    = document.getElementById('starRating').value;
+      document.getElementById('summaryLine').textContent =
+        data.organisation + '  ·  ' + ver + '  ·  ' + plat + (r ? '  ·  ' + '★'.repeat(+r) + '☆'.repeat(5 - +r) : '');
+      document.getElementById('feedbackForm').style.display = 'none';
+      document.getElementById('successScreen').style.display = 'block';
+      window.scrollTo({ top: 0, behavior:'smooth' });
+    } else {
+      btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit feedback';
+      btn.disabled = false;
+      alert('Submission failed. Please try again or email your SE directly.');
+    }
+  } catch(err) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit feedback';
+    btn.disabled = false;
+    alert('Network error. Please check your connection and try again.');
+  }
 });
 
 document.getElementById('anotherBtn').addEventListener('click', () => {
